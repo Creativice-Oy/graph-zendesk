@@ -23,20 +23,22 @@ router.get('/redirect', async ({ request, response }) => {
   const code = request.query.code;
 
   if (code) {
-    const res = await(await fetch(`${ZENDESK_OAUTH_BASE_URI}/tokens`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        code,
-        redirect_uri: process.env.REDIRECT_URI,
-        scope: 'read write'
+    const res = await (
+      await fetch(`${ZENDESK_OAUTH_BASE_URI}/tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          client_id: process.env.CLIENT_ID,
+          client_secret: process.env.CLIENT_SECRET,
+          code,
+          redirect_uri: process.env.REDIRECT_URI,
+          scope: 'read write',
+        }),
       })
-    })).json()
+    ).json();
 
     response.body = `OAuth token: ${res.access_token}`;
   } else {

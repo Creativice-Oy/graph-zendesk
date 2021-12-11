@@ -21,12 +21,12 @@ import { createAPIClient } from './client';
  * `instance.config` in a UI.
  */
 export const instanceConfigFields: IntegrationInstanceConfigFieldMap = {
-  clientId: {
-    type: 'string',
-  },
-  clientSecret: {
+  zendeskAccessToken: {
     type: 'string',
     mask: true,
+  },
+  zendeskSubdomain: {
+    type: 'string',
   },
 };
 
@@ -35,15 +35,8 @@ export const instanceConfigFields: IntegrationInstanceConfigFieldMap = {
  * same properties defined by `instanceConfigFields`.
  */
 export interface IntegrationConfig extends IntegrationInstanceConfig {
-  /**
-   * The provider API client ID used to authenticate requests.
-   */
-  clientId: string;
-
-  /**
-   * The provider API client secret used to authenticate requests.
-   */
-  clientSecret: string;
+  zendeskAccessToken: string;
+  zendeskSubdomain: string;
 }
 
 export async function validateInvocation(
@@ -51,9 +44,9 @@ export async function validateInvocation(
 ) {
   const { config } = context.instance;
 
-  if (!config.clientId || !config.clientSecret) {
+  if (!config.zendeskAccessToken || !config.zendeskSubdomain) {
     throw new IntegrationValidationError(
-      'Config requires all of {clientId, clientSecret}',
+      'Config requires all of {zendeskAccessToken,zendeskSubdomain}',
     );
   }
 

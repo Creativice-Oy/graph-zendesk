@@ -1,25 +1,80 @@
-// Providers often supply types with their API libraries.
-
-export interface AcmeUser {
-  id: string;
+export interface User {
+  active?: boolean;
+  chat_only?: boolean;
+  created_at?: string;
+  default_group_id?: string;
+  email?: string;
+  iana_time_zone?: string;
+  id?: string;
+  locale?: string;
+  locale_id?: number;
+  moderator?: boolean;
   name: string;
+  notes?: string;
+  organization_id?: number;
+  phone?: string;
+  photo?: {
+    content_url?: string;
+  };
+  restricted_agent?: boolean;
+  role?: string;
+  shared?: boolean;
+  suspended?: boolean;
+  time_zone?: string;
+  updated_at?: string;
+  url?: string;
+  verified?: boolean;
 }
 
-export interface AcmeGroup {
-  id: string;
+export interface Group {
+  created_at?: string;
+  default?: boolean;
+  deleted?: boolean;
+  description?: string;
+  id?: number;
   name: string;
-  users?: Pick<AcmeUser, 'id'>[];
+  updated_at?: string;
+  url?: string;
 }
 
-// Those can be useful to a degree, but often they're just full of optional
-// values. Understanding the response data may be more reliably accomplished by
-// reviewing the API response recordings produced by testing the wrapper client
-// (./client.ts). However, when there are no types provided, it is necessary to define
-// opaque types for each resource, to communicate the records that are expected
-// to come from an endpoint and are provided to iterating functions.
+export interface Organization {
+  created_at?: string;
+  details?: string;
+  domain_names?: string[];
+  group_id?: number;
+  id?: number;
+  name?: string;
+  notes?: string;
+  shared_comments?: boolean;
+  shared_tickets?: boolean;
+  updated_at?: string;
+  url?: string;
+}
 
-/*
-import { Opaque } from 'type-fest';
-export type AcmeUser = Opaque<any, 'AcmeUser'>;
-export type AcmeGroup = Opaque<any, 'AcmeGroup'>;
-*/
+export interface Ticket {
+  assignee_email?: string;
+  assignee_id?: number;
+  brand_id?: number;
+  collaborator_ids?: string[];
+  created_at?: string;
+  description?: string;
+  due_at?: string;
+  email_cc_ids?: string[];
+  follower_ids?: string[];
+  forum_topic_id?: string;
+  group_id?: string;
+  has_incidents?: boolean;
+  id?: number;
+  name?: string;
+  organization_id?: number;
+  priority?: 'urgent' | 'high' | 'normal' | 'low';
+  problem_id?: number;
+  recipient?: string;
+  requested_id?: number;
+  status?: 'new' | 'open' | 'pending' | 'hold' | 'solved' | 'closed';
+  subject?: string;
+  submitter_id?: number;
+  requester_id?: number;
+  type?: 'problem' | 'incident' | 'question' | 'task';
+  url?: string;
+}

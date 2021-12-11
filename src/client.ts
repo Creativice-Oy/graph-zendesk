@@ -1,52 +1,97 @@
-import http from 'http';
-
-import { IntegrationProviderAuthenticationError } from '@jupiterone/integration-sdk-core';
+import fetch from 'node-fetch';
+import {
+  IntegrationProviderAPIError,
+  IntegrationProviderAuthenticationError,
+} from '@jupiterone/integration-sdk-core';
 
 import { IntegrationConfig } from './config';
-import { AcmeUser, AcmeGroup } from './types';
+import { Group, Organization, Ticket, User } from './types';
 
 export type ResourceIteratee<T> = (each: T) => Promise<void> | void;
+export type PageIteratee<T> = (page: T[]) => Promise<void>;
 
-/**
- * An APIClient maintains authentication state and provides an interface to
- * third party data APIs.
- *
- * It is recommended that integrations wrap provider data APIs to provide a
- * place to handle error responses and implement common patterns for iterating
- * resources.
- */
 export class APIClient {
   constructor(readonly config: IntegrationConfig) {}
 
-  public async verifyAuthentication(): Promise<void> {
-    // TODO make the most light-weight request possible to validate
-    // authentication works with the provided credentials, throw an err if
-    // authentication fails
-    const request = new Promise<void>((resolve, reject) => {
-      http.get(
-        {
-          hostname: 'localhost',
-          port: 443,
-          path: '/api/v1/some/endpoint?limit=1',
-          agent: false,
-          timeout: 10,
-        },
-        (res) => {
-          if (res.statusCode !== 200) {
-            reject(new Error('Provider authentication failed'));
-          } else {
-            resolve();
-          }
-        },
-      );
-    });
+  private readonly baseUrl = `${this.config.zendeskSubdomain}.zendesk.com/api/v2`;
 
+  async apiRequestWithErrorHandling(
+    path: string,
+    attemptCounter = 1,
+  ): Promise<any> {
+    if (attemptCounter >= 10) {
+      throw new Error('Max API request attempts reached.');
+    }
     try {
-      await request;
+      const res = await fetch(`https://${this.baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.config.zendeskAccessToken}`,
+        },
+      });
+      const status = res.status;
+      if (status === 429) {
+        // Rate limit exceeded
+        const retryAfter = res.headers.get('Retry-After');
+        // We want to wait for the necessary time + 3s and then retry
+        const retryAfterMs = Number(retryAfter || 5) * 1000 + 3000;
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+        return this.apiRequestWithErrorHandling(path, attemptCounter + 1);
+      }
+      if (status === 500) {
+        if (attemptCounter > 1) {
+          throw new Error('Internal server error.');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        return this.apiRequestWithErrorHandling(path, 2);
+      }
+      const body = await res.json();
+      return body;
+    } catch (err) {
+      throw new IntegrationProviderAPIError({
+        cause: new Error(err.message),
+        endpoint: path,
+        status: err.statusCode,
+        statusText: err.message,
+      });
+    }
+  }
+
+  async apiRequestWithPagination<T>(
+    path: string,
+    pageIteratee: PageIteratee<T>,
+  ): Promise<void> {
+    try {
+      let page: number | null = 1;
+      do {
+        const response = await this.apiRequestWithErrorHandling(
+          `${path}.json?page=${page}`,
+        );
+        const resource = path.split('/')[1];
+        page = response.nextPage;
+        await pageIteratee(response[resource]);
+      } while (page);
+    } catch (err) {
+      throw new IntegrationProviderAPIError({
+        cause: new Error(err.message),
+        endpoint: path,
+        status: err.statusCode,
+        statusText: err.message,
+      });
+    }
+  }
+
+  public async verifyAuthentication(): Promise<void> {
+    try {
+      const users = (await this.apiRequestWithErrorHandling('/users.json'))
+        .users;
+      if (!users) {
+        throw new Error('Provider authentication failed');
+      }
     } catch (err) {
       throw new IntegrationProviderAuthenticationError({
         cause: err,
-        endpoint: 'https://localhost/api/v1/some/endpoint?limit=1',
+        endpoint: '/users',
         status: err.status,
         statusText: err.statusText,
       });
@@ -58,31 +103,12 @@ export class APIClient {
    *
    * @param iteratee receives each resource to produce entities/relationships
    */
-  public async iterateUsers(
-    iteratee: ResourceIteratee<AcmeUser>,
-  ): Promise<void> {
-    // TODO paginate an endpoint, invoke the iteratee with each record in the
-    // page
-    //
-    // The provider API will hopefully support pagination. Functions like this
-    // should maintain pagination state, and for each page, for each record in
-    // the page, invoke the `ResourceIteratee`. This will encourage a pattern
-    // where each resource is processed and dropped from memory.
-
-    const users: AcmeUser[] = [
-      {
-        id: 'acme-user-1',
-        name: 'User One',
-      },
-      {
-        id: 'acme-user-2',
-        name: 'User Two',
-      },
-    ];
-
-    for (const user of users) {
-      await iteratee(user);
-    }
+  public async iterateUsers(iteratee: ResourceIteratee<User>): Promise<void> {
+    await this.apiRequestWithPagination<User>('/users', async (users) => {
+      for (const user of users) {
+        await iteratee(user);
+      }
+    });
   }
 
   /**
@@ -90,32 +116,49 @@ export class APIClient {
    *
    * @param iteratee receives each resource to produce entities/relationships
    */
-  public async iterateGroups(
-    iteratee: ResourceIteratee<AcmeGroup>,
+  public async iterateGroups(iteratee: ResourceIteratee<Group>): Promise<void> {
+    await this.apiRequestWithPagination<Group>('/groups', async (groups) => {
+      for (const group of groups) {
+        await iteratee(group);
+      }
+    });
+  }
+
+  /**
+   * Iterates each organization resource in the provider.
+   *
+   * @param iteratee receives each resource to produce entities/relationships
+   */
+  public async iterateOrganizations(
+    iteratee: ResourceIteratee<Organization>,
   ): Promise<void> {
-    // TODO paginate an endpoint, invoke the iteratee with each record in the
-    // page
-    //
-    // The provider API will hopefully support pagination. Functions like this
-    // should maintain pagination state, and for each page, for each record in
-    // the page, invoke the `ResourceIteratee`. This will encourage a pattern
-    // where each resource is processed and dropped from memory.
-
-    const groups: AcmeGroup[] = [
-      {
-        id: 'acme-group-1',
-        name: 'Group One',
-        users: [
-          {
-            id: 'acme-user-1',
-          },
-        ],
+    await this.apiRequestWithPagination<Organization>(
+      '/organizations',
+      async (organizations) => {
+        for (const organization of organizations) {
+          await iteratee(organization);
+        }
       },
-    ];
+    );
+  }
 
-    for (const group of groups) {
-      await iteratee(group);
-    }
+  /**
+   * Iterates each ticket resource in the provider.
+   *
+   * @param iteratee receives each resource to produce entities/relationships
+   */
+  public async iterateTickets(
+    iteratee: ResourceIteratee<Ticket>,
+  ): Promise<void> {
+    await this.apiRequestWithPagination<Ticket>('/tickets', async (tickets) => {
+      for (const ticket of tickets) {
+        await iteratee(ticket);
+      }
+    });
+  }
+
+  public async getCurrentUser(): Promise<User> {
+    return (await this.apiRequestWithErrorHandling(`/users/me.json`)).user;
   }
 }
 
