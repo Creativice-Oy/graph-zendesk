@@ -8,7 +8,7 @@ if (process.env.LOAD_ENV) {
   });
 }
 
-const DEFAULT_SUBDOMAIN = 'jupiterone-dev';
+const DEFAULT_SUBDOMAIN = 'creativice';
 const ZENDESK_ACCESS_TOKEN = 'dummy-zendesk-access-token';
 
 export const integrationConfig: IntegrationConfig = {

@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed pagination issue.
+
 ## [1.1.0] - 2022-01-28
 
 ### Added

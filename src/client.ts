@@ -14,6 +14,7 @@ export class APIClient {
   constructor(readonly config: IntegrationConfig) {}
 
   private readonly baseUrl = `${this.config.zendeskSubdomain}.zendesk.com/api/v2`;
+  private readonly paginateEntitiesPerPage = 100;
 
   async apiRequestWithErrorHandling(
     path: string,
@@ -62,15 +63,26 @@ export class APIClient {
     pageIteratee: PageIteratee<T>,
   ): Promise<void> {
     try {
-      let page: number | null = 1;
+      let nextPageQueryString: string | null = null;
       do {
-        const response = await this.apiRequestWithErrorHandling(
-          `${path}.json?page=${page}`,
-        );
+        let response;
+        if (nextPageQueryString) {
+          response = await this.apiRequestWithErrorHandling(
+            `${path}.json?${nextPageQueryString}`,
+          );
+        } else {
+          response = await this.apiRequestWithErrorHandling(
+            `${path}.json?page[size]=${this.paginateEntitiesPerPage}`,
+          );
+        }
         const resource = path.split('/')[1];
-        page = response.nextPage;
+        if (response?.meta?.has_more) {
+          nextPageQueryString = response?.links?.next?.split('?')[1];
+        } else {
+          nextPageQueryString = null;
+        }
         await pageIteratee(response[resource]);
-      } while (page);
+      } while (nextPageQueryString);
     } catch (err) {
       throw new IntegrationProviderAPIError({
         cause: new Error(err.message),
